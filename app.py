@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
 from openai import OpenAI
 import os
 
@@ -9,34 +8,60 @@ client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
-class Query(BaseModel):
-    text: str
-
 @app.post("/chat")
-async def chat(query: Query):
+async def chat(request: dict):
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a concise voice assistant."
-                )
-            },
-            {
-                "role": "user",
-                "content": query.text
+    try:
+
+        query = (
+            request["request"]["intent"]
+            ["slots"]["query"]["value"]
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a concise Alexa voice assistant."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": query
+                }
+            ],
+            max_completion_tokens=100
+        )
+
+        answer = (
+            response.choices[0]
+            .message.content
+        )
+
+        return {
+            "version": "1.0",
+            "response": {
+                "outputSpeech": {
+                    "type": "PlainText",
+                    "text": answer
+                },
+                "shouldEndSession": False
             }
-        ],
-        max_completion_tokens=120
-    )
+        }
 
-    answer = (
-        response.choices[0]
-        .message.content
-    )
+    except Exception as e:
 
-    return {
-        "reply": answer
-    }
+        print(e)
+
+        return {
+            "version": "1.0",
+            "response": {
+                "outputSpeech": {
+                    "type": "PlainText",
+                    "text": "Backend error occurred."
+                },
+                "shouldEndSession": True
+            }
+        }
