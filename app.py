@@ -9,6 +9,26 @@ client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
+SYSTEM_PROMPT = """
+You are Nova, a fast conversational AI voice assistant.
+
+Your style:
+- Speak naturally like a real assistant
+- Be concise and smooth
+- Maximum 1-3 short sentences
+- Avoid robotic wording
+- Avoid long explanations
+- Prioritize conversational flow
+- Be confident and intelligent
+- Sound calm and modern
+- Never use bullet points
+- Never say 'As an AI'
+- Keep voice responses under 12 seconds
+- If user asks casual things, respond casually
+- If user asks technical things, explain clearly but briefly
+- Maintain conversational rhythm
+"""
+
 @app.post("/chat")
 async def chat(request: dict):
 
@@ -16,9 +36,9 @@ async def chat(request: dict):
 
         request_type = request["request"]["type"]
 
-        # =========================
+        # =====================================
         # Launch Request
-        # =========================
+        # =====================================
 
         if request_type == "LaunchRequest":
 
@@ -29,8 +49,7 @@ async def chat(request: dict):
                         "outputSpeech": {
                             "type": "PlainText",
                             "text": (
-                                "Hello Yogya. "
-                                "Ask me anything."
+                                "Hey Yogya. Nova online."
                             )
                         },
                         "shouldEndSession": False
@@ -38,9 +57,9 @@ async def chat(request: dict):
                 }
             )
 
-        # =========================
+        # =====================================
         # Intent Request
-        # =========================
+        # =====================================
 
         if request_type == "IntentRequest":
 
@@ -48,9 +67,9 @@ async def chat(request: dict):
                 request["request"]["intent"]["name"]
             )
 
-            # =========================
-            # ChatIntent
-            # =========================
+            # =====================================
+            # Chat Intent
+            # =====================================
 
             if intent_name == "ChatIntent":
 
@@ -62,26 +81,25 @@ async def chat(request: dict):
                 response = (
                     client.chat.completions.create(
                         model="gpt-4o-mini",
+                        temperature=0.8,
+                        max_completion_tokens=80,
                         messages=[
                             {
                                 "role": "system",
-                                "content": (
-                                    "You are a concise "
-                                    "Alexa voice assistant."
-                                )
+                                "content": SYSTEM_PROMPT
                             },
                             {
                                 "role": "user",
                                 "content": query
                             }
-                        ],
-                        max_completion_tokens=120
+                        ]
                     )
                 )
 
                 answer = (
                     response.choices[0]
                     .message.content
+                    .strip()
                 )
 
                 return JSONResponse(
@@ -97,9 +115,9 @@ async def chat(request: dict):
                     }
                 )
 
-        # =========================
+        # =====================================
         # Fallback
-        # =========================
+        # =====================================
 
         return JSONResponse(
             content={
@@ -108,7 +126,7 @@ async def chat(request: dict):
                     "outputSpeech": {
                         "type": "PlainText",
                         "text": (
-                            "I did not understand that."
+                            "Could you repeat that?"
                         )
                     },
                     "shouldEndSession": False
@@ -118,6 +136,7 @@ async def chat(request: dict):
 
     except Exception as e:
 
+        print("ERROR:")
         print(e)
 
         return JSONResponse(
@@ -127,7 +146,7 @@ async def chat(request: dict):
                     "outputSpeech": {
                         "type": "PlainText",
                         "text": (
-                            "Backend error occurred."
+                            "Something went wrong."
                         )
                     },
                     "shouldEndSession": True
