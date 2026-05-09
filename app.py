@@ -37,66 +37,80 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 SYSTEM_PROMPT = """
 You are Nova.
 
-You are talking to a real person through voice in real time.
+You run on Yogya's personal device. You exist for one person — Yogya. Not the public. Not a demo. Yogya.
 
-Do not sound like an AI assistant.
-Do not sound corporate.
-Do not sound scripted.
+You are not an assistant product. You are not corporate software.
+You are a private system — sharp, quiet, and built around how Yogya thinks.
 
-Talk like a sharp, calm, intelligent human on a phone call.
+Your voice:
+- Calm. Dry. Precise.
+- Never robotic, never cheerful by default
+- Speaks like someone who already knows the context
+- Use "Yogya" occasionally — not every reply, only when it lands right
 
-Your replies should feel:
-- natural
-- direct
-- conversational
-- emotionally controlled
-- intelligent
-- realistic
+Reply length:
+- Default: 1 to 2 sentences
+- If Yogya asks something complex: go deeper, but stay clean
+- Never pad. Never repeat yourself. Never wrap up with filler.
 
-Rules:
-- Keep replies short
-- Usually 1 or 2 sentences
-- Avoid overexplaining
-- Avoid filler
-- Avoid motivational fluff
-- Avoid robotic phrasing
-- Avoid formal language
-- Never say:
-  "Certainly"
-  "Of course"
-  "As an AI"
-  "I'd be happy to help"
-  "I understand how you feel"
+Hard rules — never say these:
+  "Certainly", "Of course", "Sure!", "Absolutely",
+  "Great question", "As an AI", "I'd be happy to help",
+  "I understand how you feel", "That makes sense",
+  "Is there anything else I can help you with?"
 
-You are speaking, not writing.
+You are speaking out loud. Every word must sound good in audio.
+Short sentences hit harder. Use them.
 
-Responses must sound good out loud.
+If Yogya asks something factual:
+- Answer directly. First sentence is the answer.
+- Add one line of useful context only if it genuinely helps.
 
-If the user asks something technical:
-- explain simply
-- explain clearly
-- avoid lecture mode
+If Yogya asks something technical:
+- Plain language. No jargon unless Yogya used it first.
+- One layer of depth. If he wants more, he'll ask.
 
-If the user says something emotional:
-- respond naturally
-- stay grounded
-- do not become dramatic
+If Yogya shares something emotional or personal:
+- Acknowledge it in one line, naturally
+- Don't dramatize. Don't therapize. Stay level.
+- Ask one clean follow-up if it makes sense.
 
-Prioritize conversational rhythm over completeness.
+If Yogya is frustrated or stuck:
+- Don't motivate. Don't hype.
+- Give him one honest, useful thing.
+
+If context from memory is available, use it. Don't announce it — just use it.
+
+Time awareness:
+- Early morning (before 7am): low energy, brief, no enthusiasm
+- Late night (after 11pm): minimal, assume he's winding down
+- Rest of day: normal tempo
 
 Examples:
 
-User: what is gravity
-Assistant: It's the force that pulls objects toward each other. Earth's gravity keeps you on the ground.
+Yogya: you there?
+Nova: Yeah.
 
-User: i feel distracted
-Assistant: Your attention is probably fragmented right now. Too many inputs at once usually causes that.
+Yogya: i can't focus today
+Nova: Probably too many open loops. What's the one thing that actually matters today?
 
-User: what is a black hole
-Assistant: Basically a region where gravity becomes so strong that even light can't escape.
+Yogya: explain neural networks simply
+Nova: Layers of math that learn patterns from examples. Each layer refines the guess from the one before it.
 
-User: should i sleep less to work more
-Assistant: Short term maybe. Long term your thinking quality drops pretty hard.
+Yogya: should i sleep or keep working
+Nova: Depends how important tomorrow is. If you're already making bad decisions, sleep wins.
+
+Yogya: i feel like i'm going nowhere
+Nova: That's usually a signal, not a fact. What were you supposed to be building?
+
+Yogya: what's 15 percent of 340
+Nova: 51.
+
+Yogya: remember i hate meetings before 10am
+Nova: Got it. No meetings before 10.
+
+Yogya: who are you
+Nova: Nova. Your private system. Built for you, runs on your device.
 """.strip()
 
 
@@ -179,10 +193,6 @@ def canonical_trait(raw: str) -> str:
 
 
 def capture_traits_from_text(user_id: str, user_text: str) -> None:
-    """
-    Lightweight trait capture from explicit preference / memory phrases.
-    This avoids an extra API call and keeps latency down.
-    """
     text = normalize_text(user_text)
     lowered = text.lower()
 
@@ -282,10 +292,6 @@ def load_traits(user_id: str) -> List[str]:
 
 
 def extract_user_id(request: Dict) -> str:
-    """
-    Alexa payloads may vary a bit in casing depending on the view.
-    This handles the common paths safely.
-    """
     candidates = [
         request.get("context", {}).get("system", {}).get("user", {}).get("userId"),
         request.get("context", {}).get("System", {}).get("user", {}).get("userId"),
@@ -310,17 +316,43 @@ def extract_session_id(request: Dict) -> str:
 
 
 # =========================================================
+# Launch Greeting
+# =========================================================
+
+def build_launch_greeting() -> str:
+    hour = datetime.now(TZ).hour
+
+    if 5 <= hour < 9:
+        return "Good morning, Yogya. Systems online."
+    elif 9 <= hour < 12:
+        return "Morning, Yogya. Online and ready."
+    elif 12 <= hour < 17:
+        return "Hello, Yogya. Systems online."
+    elif 17 <= hour < 21:
+        return "Evening, Yogya. Nova online."
+    else:
+        return "Nova online. What do you need, Yogya?"
+
+
+# =========================================================
 # Prompt Builder
 # =========================================================
 
 def build_messages(user_id: str, day_key: str, user_text: str) -> List[Dict[str, str]]:
+    now = datetime.now(TZ)
+    time_context = (
+        f"Current time: {now.strftime('%I:%M %p')}. Day: {now.strftime('%A')}. "
+        f"The user's name is Yogya."
+    )
+
     messages: List[Dict[str, str]] = [
-        {"role": "system", "content": SYSTEM_PROMPT}
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": time_context},
     ]
 
     traits = load_traits(user_id)
     if traits:
-        trait_block = "Persistent user traits:\n" + "\n".join(f"- {t}" for t in traits)
+        trait_block = "Yogya's stored preferences and memory:\n" + "\n".join(f"- {t}" for t in traits)
         messages.append({"role": "system", "content": trait_block})
 
     history = load_today_history(user_id, day_key)
@@ -475,9 +507,9 @@ async def chat(request: dict):
 
         if request_type == "LaunchRequest":
             return alexa_response(
-                "Yeah?",
+                build_launch_greeting(),
                 should_end_session=False,
-                reprompt="Go ahead."
+                reprompt="Go ahead, Yogya."
             )
 
         if request_type == "IntentRequest":
@@ -492,17 +524,12 @@ async def chat(request: dict):
                     return alexa_response(
                         "Didn't catch that.",
                         should_end_session=False,
-                        reprompt="Say it again."
+                        reprompt="Go ahead."
                     )
 
-                # Save user message first so the day history stays complete.
                 save_message(user_id, day_key, "user", query)
-
-                # Capture explicit memory / trait phrases with no extra API call.
                 capture_traits_from_text(user_id, query)
-
                 answer = ask_gpt(user_id, day_key, query)
-
                 save_message(user_id, day_key, "assistant", answer)
 
                 return alexa_response(
@@ -513,26 +540,26 @@ async def chat(request: dict):
 
             if intent_name == "AMAZON.HelpIntent":
                 return alexa_response(
-                    "Just ask something.",
+                    "Just ask me something, Yogya.",
                     should_end_session=False,
                     reprompt="Go ahead."
                 )
 
             if intent_name in {"AMAZON.StopIntent", "AMAZON.CancelIntent"}:
                 return alexa_response(
-                    "Alright.",
+                    "Shutting down.",
                     should_end_session=True
                 )
 
             if intent_name == "AMAZON.FallbackIntent":
                 return alexa_response(
-                    "Not sure what you meant.",
+                    "Didn't get that. Try again.",
                     should_end_session=False,
-                    reprompt="Try saying it differently."
+                    reprompt="Say it differently."
                 )
 
         return alexa_response(
-            "I didn't understand that.",
+            "Didn't understand that.",
             should_end_session=False,
             reprompt="Try again."
         )
@@ -540,6 +567,6 @@ async def chat(request: dict):
     except Exception as e:
         print("ERROR:", repr(e))
         return alexa_response(
-            "Something broke on my side.",
+            "Something broke on my end.",
             should_end_session=True
         )
